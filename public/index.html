@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Node.js OCR API - Extract Text from Images</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <!-- PDF.js library for PDF handling -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Node.js OCR API</h1>
+        <p>Extract text from images and PDFs using Google Drive</p>
+      </header>
+
+      <main>
+        <div class="upload-container">
+          <h2>Upload Image or PDF</h2>
+          <div class="file-input">
+            <input
+              type="file"
+              id="imageUpload"
+              accept="image/*,application/pdf"
+              class="inputfile"
+            />
+            <label for="imageUpload">Choose a file</label>
+            <p id="file-chosen-text">No files chosen</p>
+          </div>
+          <button id="processButton" disabled>Extract Text</button>
+        </div>
+
+        <div id="loading" style="display: none">
+          <div class="spinner"></div>
+          <p>Processing your images...</p>
+        </div>
+
+        <div id="resultsArea" class="results-area">
+          <h2>Results will appear here</h2>
+        </div>
+      </main>
+    </div>
+
+    <script src="js/script.js"></script>
+  </body>
+</html>
