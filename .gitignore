@@ -16,6 +16,7 @@ secure_files/
 *.json
 !package.json
 !package-lock.json
+!vercel.json
 
 # Environment variables
 .env
