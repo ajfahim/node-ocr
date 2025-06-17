@@ -11,15 +11,5 @@
       "src": "/(.*)",
       "dest": "/server.js"
     }
-  ],
-  "functions": {
-    "api/ocr/base64": {
-      "memory": 1024,
-      "maxDuration": 60
-    },
-    "api/ocr/upload": {
-      "memory": 1024,
-      "maxDuration": 60
-    }
-  }
+  ]
 }
