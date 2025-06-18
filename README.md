@@ -1,6 +1,6 @@
 # Node.js OCR API
 
-A high-performance OCR API that uses Google Drive for text extraction. This API provides significantly better concurrency and performance compared to traditional PHP implementations.
+A high-performance OCR API that uses Google Drive for text extraction. It leverages asynchronous Node.js features for concurrency. Benchmarks show slower throughput and longer response times compared to the PHP reference implementation.
 
 ## Features
 
@@ -69,7 +69,9 @@ GOOGLE_CREDENTIALS=[{"type":"service_account","project_id":"..."},{"type":"servi
 
 ## Performance
 
-Performance testing has shown significant improvements over PHP implementations:
-- Higher throughput (requests/second)
-- Lower response times
-- Better handling of concurrent requests
+Recent benchmarks indicate the Node.js version is currently slower than the PHP implementation:
+- Throughput: ~0.19 req/sec vs PHP ~0.66 req/sec
+- Average response time: ~5.3s vs PHP ~1.5s
+- Success rate: 100% for both.
+
+See `public/performance-report.html` for detailed results.
