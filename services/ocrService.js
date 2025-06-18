@@ -28,7 +28,7 @@ const MAX_POOL_SIZE = 20; // Increased for higher concurrency
 
 // Cache for credential files and their content
 let cachedCredentialFiles = null;
-const credentialContentCache = {}; // Cache credential file contents
+const credentialFileCache = {}; // Cache credential file contents
 
 // LRU Cache for authenticated clients
 const clientCache = new LRUCache({
@@ -143,12 +143,12 @@ async function getGoogleClient() {
     // Read the credential file - use cached content when available
     let credentials;
 
-    if (credentialContentCache[selectedCredentialPath]) {
-      credentials = credentialContentCache[selectedCredentialPath];
+    if (credentialFileCache[selectedCredentialPath]) {
+      credentials = credentialFileCache[selectedCredentialPath];
     } else {
       const credentialContent = await fs.readFile(selectedCredentialPath, "utf8");
       credentials = JSON.parse(credentialContent);
-      credentialContentCache[selectedCredentialPath] = credentials;
+      credentialFileCache[selectedCredentialPath] = credentials;
     }
 
     // Create and authorize client
