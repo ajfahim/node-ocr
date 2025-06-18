@@ -13,7 +13,7 @@ const { performOcr } = require("./services/ocrService");
 
 // Create Express app
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 5000;
 
 // Configure logger
 const logger = winston.createLogger({
@@ -77,8 +77,8 @@ app.use(apiLimiter);
 app.use(express.static(path.join(__dirname, "public")));
 
 // Health check endpoint for monitoring
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', uptime: process.uptime() });
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", uptime: process.uptime() });
 });
 
 // OCR endpoint for base64 image data
