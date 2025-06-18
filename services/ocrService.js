@@ -22,12 +22,13 @@ const logger = winston.createLogger({
   ],
 });
 
-// Connection pooling and caching
+// Enhanced connection pooling and caching settings
 const clientPool = [];
-const MAX_POOL_SIZE = 10; // Adjust based on expected load
+const MAX_POOL_SIZE = 20; // Increased for higher concurrency
 
-// Cache for credential files
+// Cache for credential files and their content
 let cachedCredentialFiles = null;
+const credentialContentCache = {}; // Cache credential file contents
 
 // LRU Cache for authenticated clients
 const clientCache = new LRUCache({
@@ -97,30 +98,37 @@ async function getCredentialFiles() {
   }
 }
 
-// Get Google API client using service account credentials with connection pooling
+// Get Google API client using service account credentials with multi-credential rotation
 async function getGoogleClient() {
   try {
-    // Check for available client in the pool
+    // Check for available client in the pool first (fastest path)
     if (clientPool.length > 0) {
       const pooledClient = clientPool.shift();
       logger.debug(`Using client from pool. Pool size now: ${clientPool.length}`);
       return pooledClient;
     }
 
-    // Check cache for existing client
-    const cacheKey = 'google-client';
-    const cachedClient = clientCache.get(cacheKey);
-    if (cachedClient) {
-      logger.debug('Using cached Google client');
-      return cachedClient;
-    }
-
-    // No cached client, create a new one
+    // Get all available credential files
     const credentialFiles = await getCredentialFiles();
-    // Rotate through credential files for load balancing
+    if (credentialFiles.length === 0) {
+      throw new Error("No credential files available");
+    }
+    
+    // Enhanced rotation - maintain separate clients per credential file
+    // Select a credential file randomly to distribute load
     const credentialIndex = Math.floor(Math.random() * credentialFiles.length);
     const selectedCredentialPath = credentialFiles[credentialIndex];
-
+    
+    // Generate cache key based on the credential path for more clients
+    const cacheKey = `google-client-${path.basename(selectedCredentialPath)}`;
+    
+    // Check if we have a cached client for this specific credential
+    const cachedClient = clientCache.get(cacheKey);
+    if (cachedClient) {
+      logger.debug(`Using cached Google client for ${path.basename(selectedCredentialPath)}`);
+      return cachedClient;
+    }
+    
     // Extract credential number for logging
     let credentialNumber = "unknown";
     const match = selectedCredentialPath.match(
@@ -130,13 +138,19 @@ async function getGoogleClient() {
       credentialNumber = match[1];
     }
 
-    logger.info(
-      `Creating new Google client with credential: ${path.basename(selectedCredentialPath)}`
-    );
+    logger.info(`Creating new Google client with credential: ${path.basename(selectedCredentialPath)}`);
 
-    // Read the credential file
-    const credentialContent = await fs.readFile(selectedCredentialPath, "utf8");
-    const credentials = JSON.parse(credentialContent);
+    // Read the credential file - use cached content when available
+    const credentialFileCache = {};
+    let credentials;
+    
+    if (credentialFileCache[selectedCredentialPath]) {
+      credentials = credentialFileCache[selectedCredentialPath];
+    } else {
+      const credentialContent = await fs.readFile(selectedCredentialPath, "utf8");
+      credentials = JSON.parse(credentialContent);
+      credentialFileCache[selectedCredentialPath] = credentials;
+    }
 
     // Create and authorize client
     const auth = new google.auth.GoogleAuth({
@@ -164,135 +178,157 @@ async function getGoogleClient() {
   }
 }
 
-// Main OCR function that processes an image and returns the extracted text
+// Main OCR function that processes an image and returns the extracted text - optimized version
 async function performOcr(imageData, originalFileName, mimeType) {
+  // Single structure for timing and results like PHP version
+  const overallStartTime = Date.now();
   const result = {
     fileName: originalFileName,
     success: false,
     text: "",
     error: "",
-    timing: {},
+    timing: {
+      "0_start_js_function": 0
+    },
     credentialUsed: "unknown",
   };
-
-  const startTime = Date.now();
-  result.timing["0_start"] = 0;
 
   let googleDocId = null;
   let googleClient = null;
 
   try {
-    // Get authenticated Google client from pool
-    const clientStartTime = Date.now();
+    // Fast path: Get authenticated Google client from pool
     googleClient = await getGoogleClient();
     result.credentialUsed = googleClient.credentialNumber;
-    result.timing["0.5_get_client"] = (Date.now() - clientStartTime) / 1000;
-
-    // Use the already instantiated drive service
+    
+    // Get the drive service (already instantiated)
     const drive = googleClient.drive;
 
-    // 1. Upload the image directly as a Google Document (triggers OCR)
+    // 1. Direct upload as Google Document (triggers OCR) - one step like PHP
     const uploadStartTime = Date.now();
 
-    // Create a safe filename
-    const safeFileName =
-      "ocr_gdoc_node_" +
-      originalFileName.replace(/[^a-zA-Z0-9._-]/g, "_") +
-      "_" +
-      Date.now();
-
+    // Create minimal file metadata (same as PHP)
+    const safeFileName = "ocr_gdoc_node_" + 
+      originalFileName.replace(/[^a-zA-Z0-9._-]/g, "_") + 
+      "_" + Date.now();
+      
     const fileMetadata = {
       name: safeFileName,
-      mimeType: "application/vnd.google-apps.document", // Tell Drive to convert to Google Doc
+      mimeType: "application/vnd.google-apps.document", // Convert to Google Doc for OCR
     };
 
-    // Upload the file to Google Drive and convert to Google Doc
-    logger.info(`Uploading image to Google Drive: ${safeFileName}`);
+    // STREAMLINED: Optimized upload directly from binary data like PHP
+    // Avoid creating streams when possible - direct upload is faster
+    let response;
     
-    // Create a readable stream from buffer for Google Drive API
-    const bufferStream = new Readable();
-    bufferStream.push(imageData);
-    bufferStream.push(null); // Mark end of stream
-    
-    const response = await drive.files.create({
-      requestBody: fileMetadata,
-      media: {
-        mimeType: mimeType,
-        body: bufferStream
-      },
-      fields: 'id'
-    });
+    // Two optimized paths - choose the most efficient based on data type
+    if (Buffer.isBuffer(imageData)) {
+      // Direct binary upload - most efficient
+      response = await drive.files.create({
+        requestBody: fileMetadata,
+        media: {
+          mimeType: mimeType,
+          body: imageData // Direct buffer upload
+        },
+        fields: 'id' // Only request ID to minimize response size
+      });
+    } else {
+      // Fallback to stream method if not buffer
+      const bufferStream = new Readable();
+      bufferStream.push(imageData);
+      bufferStream.push(null);
+      
+      response = await drive.files.create({
+        requestBody: fileMetadata,
+        media: {
+          mimeType: mimeType,
+          body: bufferStream
+        },
+        fields: 'id' // Only request ID to minimize response size
+      });
+    }
 
     googleDocId = response.data.id;
-    result.timing["1_upload_and_convert_to_gdoc_ocr"] =
-      (Date.now() - uploadStartTime) / 1000;
+    result.timing["1_upload_and_convert_to_gdoc_ocr"] = (Date.now() - uploadStartTime) / 1000;
 
     if (!googleDocId) {
       throw new Error("Failed to upload image as Google Doc or get its ID.");
     }
+    result.timing["after_gdoc_creation"] = (Date.now() - overallStartTime) / 1000;
 
-    // 2. Export the Google Doc as plain text
+    // 2. Export the Google Doc as plain text - optimized like PHP
     const exportStartTime = Date.now();
-    logger.info(`Exporting Google Doc as text: ${googleDocId}`);
+    
+    // STREAMLINED: Set alt=media like PHP to get direct content
+    const exportResponse = await drive.files.export({
+      fileId: googleDocId,
+      mimeType: "text/plain",
+      alt: "media" // Get direct media content instead of JSON response
+    }, {
+      responseType: "text" // Get text directly when possible
+    });
 
-    const exportResponse = await drive.files.export(
-      {
-        fileId: googleDocId,
-        mimeType: "text/plain",
-      },
-      {
-        responseType: "arraybuffer",
-      }
-    );
+    // Get text with minimal transformation
+    let extractedText;
+    if (typeof exportResponse.data === "string") {
+      // Direct text - fastest path
+      extractedText = exportResponse.data;
+    } else {
+      // Fallback - handle other response types
+      extractedText = Buffer.from(exportResponse.data).toString("utf8");
+    }
 
-    // Convert the exported text to string
-    const extractedText = Buffer.from(exportResponse.data).toString("utf8");
-
-    // Update result
+    // Set success result
     result.success = true;
     result.text = extractedText;
-    result.timing["2_export_doc_as_text"] =
-      (Date.now() - exportStartTime) / 1000;
+    result.timing["2_export_doc_as_text"] = (Date.now() - exportStartTime) / 1000;
+    result.timing["after_export"] = (Date.now() - overallStartTime) / 1000;
+    
   } catch (error) {
+    // Streamlined error handling - only log details if needed
     logger.error(`OCR error for ${originalFileName}: ${error.message}`);
-    result.error = `Processing Error: ${error.message}`;
+    
+    // Match PHP format for errors
+    if (error.errors && error.errors.length > 0) {
+      result.error = `Google API Error: ${error.message}. Details: ${error.errors[0].message || 'Unknown'}`;
+    } else {
+      result.error = `Processing Error: ${error.message}`;
+    }
   } finally {
-    // Return client to the pool if we have one and pool isn't full
+    // Always return the client to the pool for reuse
     if (googleClient && clientPool.length < MAX_POOL_SIZE) {
       clientPool.push(googleClient);
-      logger.debug(`Returned client to pool. Pool size now: ${clientPool.length}`);
     }
     
     // 3. Delete the temporary Google Doc from Drive
     const deleteStartTime = Date.now();
+    const deleteErrors = [];
+    
     if (googleDocId) {
       try {
-        logger.info(`Deleting temporary Google Doc: ${googleDocId}`);
-        // Use the existing client if possible, or get a new one
+        // Use the existing client that already has authorization
         const drive = googleClient ? googleClient.drive : 
-                      google.drive({
-                        version: "v3",
-                        auth: (await getGoogleClient()).client,
-                      });
-        await drive.files.delete({
-          fileId: googleDocId,
-        });
-        result.timing["3_delete_temp_gdoc"] =
-          (Date.now() - deleteStartTime) / 1000;
+                      (await getGoogleClient()).drive;
+        
+        await drive.files.delete({ fileId: googleDocId });
       } catch (deleteError) {
         const deleteErrorMsg = `Failed to delete temporary Google Doc ${googleDocId}: ${deleteError.message}`;
         logger.error(deleteErrorMsg);
-
-        if (!result.error) {
-          result.error = deleteErrorMsg;
-        } else {
-          result.error += `; Cleanup errors: ${deleteErrorMsg}`;
-        }
+        deleteErrors.push(deleteErrorMsg);
+      }
+    }
+    
+    // Handle delete errors in the same way as PHP
+    if (deleteErrors.length > 0) {
+      if (!result.error) {
+        result.error = deleteErrors.join("; ");
+      } else {
+        result.error += "; Cleanup errors: " + deleteErrors.join("; ");
       }
     }
 
-    // Add total duration
-    result.timing["total_duration"] = (Date.now() - startTime) / 1000;
+    result.timing["3_delete_temp_gdoc"] = (Date.now() - deleteStartTime) / 1000;
+    result.timing["total_duration_js_script"] = (Date.now() - overallStartTime) / 1000;
   }
 
   return result;
