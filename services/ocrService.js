@@ -4,6 +4,7 @@ const path = require("path");
 const winston = require("winston");
 const { Readable } = require("stream");
 const os = require("os");
+const { LRUCache } = require('lru-cache'); // Import the named export
 
 // Configure logger
 const logger = winston.createLogger({
@@ -21,8 +22,19 @@ const logger = winston.createLogger({
   ],
 });
 
-// Credential cache to avoid reading files repeatedly
+// Connection pooling and caching
+const clientPool = [];
+const MAX_POOL_SIZE = 10; // Adjust based on expected load
+
+// Cache for credential files
 let cachedCredentialFiles = null;
+
+// LRU Cache for authenticated clients
+const clientCache = new LRUCache({
+  max: MAX_POOL_SIZE, // Maximum number of clients to keep in cache
+  ttl: 30 * 60 * 1000, // 30 minute TTL
+  updateAgeOnGet: true, // Update cache entry age on access
+});
 
 // Get list of available credential files
 async function getCredentialFiles() {
@@ -85,13 +97,29 @@ async function getCredentialFiles() {
   }
 }
 
-// Get Google API client using service account credentials
+// Get Google API client using service account credentials with connection pooling
 async function getGoogleClient() {
   try {
+    // Check for available client in the pool
+    if (clientPool.length > 0) {
+      const pooledClient = clientPool.shift();
+      logger.debug(`Using client from pool. Pool size now: ${clientPool.length}`);
+      return pooledClient;
+    }
+
+    // Check cache for existing client
+    const cacheKey = 'google-client';
+    const cachedClient = clientCache.get(cacheKey);
+    if (cachedClient) {
+      logger.debug('Using cached Google client');
+      return cachedClient;
+    }
+
+    // No cached client, create a new one
     const credentialFiles = await getCredentialFiles();
-    // Randomly select one credential file
-    const selectedCredentialPath =
-      credentialFiles[Math.floor(Math.random() * credentialFiles.length)];
+    // Rotate through credential files for load balancing
+    const credentialIndex = Math.floor(Math.random() * credentialFiles.length);
+    const selectedCredentialPath = credentialFiles[credentialIndex];
 
     // Extract credential number for logging
     let credentialNumber = "unknown";
@@ -103,7 +131,7 @@ async function getGoogleClient() {
     }
 
     logger.info(
-      `Using credential file: ${path.basename(selectedCredentialPath)}`
+      `Creating new Google client with credential: ${path.basename(selectedCredentialPath)}`
     );
 
     // Read the credential file
@@ -117,7 +145,19 @@ async function getGoogleClient() {
     });
 
     const client = await auth.getClient();
-    return { client, credentialNumber };
+    
+    // Create the client object with drive service for reuse
+    const clientObj = { 
+      client, 
+      credentialNumber,
+      drive: google.drive({ version: "v3", auth: client }),
+      created: Date.now()
+    };
+    
+    // Store in cache
+    clientCache.set(cacheKey, clientObj);
+    
+    return clientObj;
   } catch (error) {
     logger.error(`Authentication error: ${error.message}`);
     throw new Error(`Google API authentication failed: ${error.message}`);
@@ -139,14 +179,17 @@ async function performOcr(imageData, originalFileName, mimeType) {
   result.timing["0_start"] = 0;
 
   let googleDocId = null;
+  let googleClient = null;
 
   try {
-    // Get authenticated Google client
-    const { client, credentialNumber } = await getGoogleClient();
-    result.credentialUsed = credentialNumber;
+    // Get authenticated Google client from pool
+    const clientStartTime = Date.now();
+    googleClient = await getGoogleClient();
+    result.credentialUsed = googleClient.credentialNumber;
+    result.timing["0.5_get_client"] = (Date.now() - clientStartTime) / 1000;
 
-    // Create Drive service
-    const drive = google.drive({ version: "v3", auth: client });
+    // Use the already instantiated drive service
+    const drive = googleClient.drive;
 
     // 1. Upload the image directly as a Google Document (triggers OCR)
     const uploadStartTime = Date.now();
@@ -214,15 +257,23 @@ async function performOcr(imageData, originalFileName, mimeType) {
     logger.error(`OCR error for ${originalFileName}: ${error.message}`);
     result.error = `Processing Error: ${error.message}`;
   } finally {
+    // Return client to the pool if we have one and pool isn't full
+    if (googleClient && clientPool.length < MAX_POOL_SIZE) {
+      clientPool.push(googleClient);
+      logger.debug(`Returned client to pool. Pool size now: ${clientPool.length}`);
+    }
+    
     // 3. Delete the temporary Google Doc from Drive
     const deleteStartTime = Date.now();
     if (googleDocId) {
       try {
         logger.info(`Deleting temporary Google Doc: ${googleDocId}`);
-        const drive = google.drive({
-          version: "v3",
-          auth: (await getGoogleClient()).client,
-        });
+        // Use the existing client if possible, or get a new one
+        const drive = googleClient ? googleClient.drive : 
+                      google.drive({
+                        version: "v3",
+                        auth: (await getGoogleClient()).client,
+                      });
         await drive.files.delete({
           fileId: googleDocId,
         });

@@ -3,10 +3,10 @@ const path = require("path");
 const axios = require("axios");
 
 // Configuration
-const CONCURRENT_REQUESTS = 1; // Increased concurrency for stronger test
+const CONCURRENT_REQUESTS = 10; // Increased concurrency for stronger test
 const API_URL = "http://164.68.116.189/api/ocr/base64";
 const TEST_IMAGE = path.join(__dirname, "test-image.jpg");
-const TOTAL_REQUESTS = 10; // Testing with 1000 requests to check extreme load
+const TOTAL_REQUESTS = 1; // Testing with 1000 requests to check extreme load
 
 async function runLoadTest() {
   console.log(

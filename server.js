@@ -1,7 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const { rateLimit } = require("express-rate-limit");
+// Rate limiting removed for performance testing
+// const { rateLimit } = require("express-rate-limit");
 const helmet = require("helmet");
 const path = require("path");
 const fs = require("fs").promises;
@@ -61,17 +62,17 @@ const upload = multer({
   },
 });
 
-// Rate limiting
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: "Too many requests from this IP, please try again after 15 minutes",
-});
+// Rate limiting completely removed for performance testing
 
-// Apply rate limiting to all requests
-app.use(apiLimiter);
+// Simple request counter for monitoring load instead
+let requestCount = 0;
+app.use((req, res, next) => {
+  requestCount++;
+  if (requestCount % 100 === 0) {
+    logger.info(`Request count: ${requestCount}`);
+  }
+  next();
+});
 
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, "public")));

@@ -126,33 +126,33 @@
       <tbody>
         <tr>
           <td class="metric">Requests Per Second</td>
-          <td>29.79</td>
-          <td>4.97</td>
-          <td class="improvement negative">-83.32%</td>
+          <td>0.66</td>
+          <td>0.19</td>
+          <td class="improvement negative">-71.51%</td>
         </tr>
         <tr>
           <td class="metric">Success Rate</td>
           <td>100.00%</td>
-          <td>56.40%</td>
-          <td class="improvement negative">-43.60%</td>
+          <td>100.00%</td>
+          <td class="improvement negative">0.00%</td>
         </tr>
         <tr>
           <td class="metric">Average Response Time</td>
-          <td>2121.23 ms</td>
-          <td>11578.29 ms</td>
-          <td class="improvement positive">+445.83%</td>
+          <td>1513.00 ms</td>
+          <td>5314.00 ms</td>
+          <td class="improvement positive">+251.22%</td>
         </tr>
         <tr>
           <td class="metric">Median Response Time</td>
-          <td>2134.00 ms</td>
-          <td>10532.00 ms</td>
-          <td class="improvement positive">+393.53%</td>
+          <td>1513.00 ms</td>
+          <td>5314.00 ms</td>
+          <td class="improvement positive">+251.22%</td>
         </tr>
         <tr>
           <td class="metric">95th Percentile Response Time</td>
-          <td>3022.00 ms</td>
-          <td>20170.00 ms</td>
-          <td class="improvement positive">+567.44%</td>
+          <td>1513.00 ms</td>
+          <td>5314.00 ms</td>
+          <td class="improvement positive">+251.22%</td>
         </tr>
       </tbody>
     </table>
@@ -168,9 +168,9 @@
     <div class="highlight">
       <h3>Key Findings</h3>
       <ul>
-        <li><strong>Throughput:</strong> Node.js underperforms compared to PHP by -83.32% in requests per second</li>
-        <li><strong>Reliability:</strong> Node.js achieves a 56.40% success rate compared to PHP's 100.00%</li>
-        <li><strong>Response Time:</strong> Node.js response times are faster than PHP by 445.83%</li>
+        <li><strong>Throughput:</strong> Node.js underperforms compared to PHP by -71.51% in requests per second</li>
+        <li><strong>Reliability:</strong> Node.js achieves a 100.00% success rate compared to PHP's 100.00%</li>
+        <li><strong>Response Time:</strong> Node.js response times are faster than PHP by 251.22%</li>
       </ul>
     </div>
     
@@ -201,18 +201,18 @@
         <h4>PHP Test Configuration</h4>
         <ul>
           <li><strong>API Endpoint:</strong> https://ocr3.thisblogg.top/ocr.php</li>
-          <li><strong>Total Requests:</strong> 1000</li>
-          <li><strong>Concurrent Requests:</strong> 100</li>
-          <li><strong>Test Duration:</strong> 33.57 seconds</li>
+          <li><strong>Total Requests:</strong> 1</li>
+          <li><strong>Concurrent Requests:</strong> 10</li>
+          <li><strong>Test Duration:</strong> 1.51 seconds</li>
         </ul>
       </div>
       <div class="detail-box">
         <h4>Node.js Test Configuration</h4>
         <ul>
-          <li><strong>API Endpoint:</strong> https://node-ocr-8znk.vercel.app/api/ocr/base64</li>
-          <li><strong>Total Requests:</strong> 1000</li>
-          <li><strong>Concurrent Requests:</strong> 100</li>
-          <li><strong>Test Duration:</strong> 201.30 seconds</li>
+          <li><strong>API Endpoint:</strong> http://164.68.116.189/api/ocr/base64</li>
+          <li><strong>Total Requests:</strong> 1</li>
+          <li><strong>Concurrent Requests:</strong> 10</li>
+          <li><strong>Test Duration:</strong> 5.31 seconds</li>
         </ul>
       </div>
     </div>
@@ -228,14 +228,14 @@
         datasets: [
           {
             label: 'PHP (ms)',
-            data: [2121.228, 2134, 3022],
+            data: [1513, 1513, 1513],
             backgroundColor: 'rgba(54, 162, 235, 0.5)',
             borderColor: 'rgba(54, 162, 235, 1)',
             borderWidth: 1
           },
           {
             label: 'Node.js (ms)',
-            data: [11578.287234042553, 10532, 20170],
+            data: [5314, 5314, 5314],
             backgroundColor: 'rgba(75, 192, 192, 0.5)',
             borderColor: 'rgba(75, 192, 192, 1)',
             borderWidth: 1
@@ -266,14 +266,14 @@
         datasets: [
           {
             label: 'PHP',
-            data: [100, 29.787614309969918],
+            data: [100, 0.6605019815059445],
             backgroundColor: 'rgba(54, 162, 235, 0.5)',
             borderColor: 'rgba(54, 162, 235, 1)',
             borderWidth: 1
           },
           {
             label: 'Node.js',
-            data: [56.39999999999999, 4.967808600270249],
+            data: [100, 0.1881821603312006],
             backgroundColor: 'rgba(75, 192, 192, 0.5)',
             borderColor: 'rgba(75, 192, 192, 1)',
             borderWidth: 1
