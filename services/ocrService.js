@@ -141,15 +141,14 @@ async function getGoogleClient() {
     logger.info(`Creating new Google client with credential: ${path.basename(selectedCredentialPath)}`);
 
     // Read the credential file - use cached content when available
-    const credentialFileCache = {};
     let credentials;
-    
-    if (credentialFileCache[selectedCredentialPath]) {
-      credentials = credentialFileCache[selectedCredentialPath];
+
+    if (credentialContentCache[selectedCredentialPath]) {
+      credentials = credentialContentCache[selectedCredentialPath];
     } else {
       const credentialContent = await fs.readFile(selectedCredentialPath, "utf8");
       credentials = JSON.parse(credentialContent);
-      credentialFileCache[selectedCredentialPath] = credentials;
+      credentialContentCache[selectedCredentialPath] = credentials;
     }
 
     // Create and authorize client
