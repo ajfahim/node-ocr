@@ -1,0 +1,27 @@
+{
+  "name": "ocr-load-testing",
+  "version": "1.0.0",
+  "description": "Load testing tool for OCR applications",
+  "main": "load-test.js",
+  "scripts": {
+    "test": "node load-test.js",
+    "quick-test": "node -e \"const OCRLoadTester = require('./load-test.js'); const tester = new OCRLoadTester(); tester.runLoadTest(5, 30000);\"",
+    "medium-test": "node -e \"const OCRLoadTester = require('./load-test.js'); const tester = new OCRLoadTester(); tester.runLoadTest(10, 60000);\"",
+    "heavy-test": "node -e \"const OCRLoadTester = require('./load-test.js'); const tester = new OCRLoadTester(); tester.runLoadTest(25, 120000);\""
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "form-data": "^4.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "keywords": [
+    "load-testing",
+    "ocr",
+    "performance",
+    "testing"
+  ],
+  "author": "",
+  "license": "MIT"
+}
