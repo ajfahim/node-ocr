@@ -9,8 +9,8 @@ const fs = require("fs").promises;
 const winston = require("winston");
 require("dotenv").config();
 
-// Import the OCR service
-const { performOcr } = require("./services/ocrService");
+// Import the direct API OCR service (much faster than Google API client-based service)
+const { performOcr, preWarmAuthTokens } = require("./services/directApiOcrService");
 
 // Create Express app
 const app = express();
@@ -292,7 +292,15 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(port, () => {
+app.listen(port, async () => {
   logger.info(`OCR API server running on port ${port}`);
   console.log(`OCR API server running on port ${port}`);
+  
+  // Pre-warm auth tokens for better performance
+  try {
+    await preWarmAuthTokens();
+    logger.info('Authentication tokens pre-warmed and ready for use');
+  } catch (error) {
+    logger.error(`Failed to pre-warm authentication tokens: ${error.message}`);
+  }
 });
