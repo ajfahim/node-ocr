@@ -103,18 +103,18 @@ app.post("/api/ocr/base64", async (req, res) => {
       ]);
     }
     
-    // Process each image in the request
-    for (const imageItem of imageDataArray) {
+    // Process all images in parallel
+    const processingPromises = imageDataArray.map(async (imageItem) => {
       const itemStartTime = Date.now();
       
       // Validate this item has required fields
       if (!imageItem.imageBase64 || !imageItem.originalFileName) {
-        results.push({
+        return {
           fileName: imageItem.originalFileName || "N/A",
           success: false,
           error: "Missing required fields: imageBase64 and/or originalFileName.",
-        });
-        continue;
+          timing: { item_duration: (Date.now() - itemStartTime) / 1000 }
+        };
       }
       
       const { imageBase64, originalFileName } = imageItem;
@@ -129,12 +129,12 @@ app.post("/api/ocr/base64", async (req, res) => {
           extractedMimeType = matches[1];
           imageData = Buffer.from(matches[2], "base64");
         } else {
-          results.push({
+          return {
             fileName: originalFileName,
             success: false,
             error: "Invalid base64 image format.",
-          });
-          continue;
+            timing: { item_duration: (Date.now() - itemStartTime) / 1000 }
+          };
         }
       } else {
         // Raw base64 data
@@ -142,24 +142,24 @@ app.post("/api/ocr/base64", async (req, res) => {
           imageData = Buffer.from(imageBase64, "base64");
           extractedMimeType = "application/octet-stream"; // Default MIME type
         } catch (error) {
-          results.push({
+          return {
             fileName: originalFileName,
             success: false,
             error: "Invalid base64 data.",
-          });
-          continue;
+            timing: { item_duration: (Date.now() - itemStartTime) / 1000 }
+          };
         }
       }
       
       // Validate size
       const maxSize = 10 * 1024 * 1024; // 10MB
       if (imageData.length > maxSize) {
-        results.push({
+        return {
           fileName: originalFileName,
           success: false,
           error: `Decoded image exceeds maximum size of 10MB. Size: ${imageData.length} bytes.`,
-        });
-        continue;
+          timing: { item_duration: (Date.now() - itemStartTime) / 1000 }
+        };
       }
       
       // Process the image
@@ -177,16 +177,20 @@ app.post("/api/ocr/base64", async (req, res) => {
         // Add timing info for this specific image
         result.timing.item_duration = (Date.now() - itemStartTime) / 1000;
         
-        results.push(result);
+        return result;
       } catch (ocrError) {
         logger.error(`Error in OCR for ${originalFileName}: ${ocrError.message}`);
-        results.push({
+        return {
           fileName: originalFileName,
           success: false,
           error: `OCR processing error: ${ocrError.message}`,
-        });
+          timing: { item_duration: (Date.now() - itemStartTime) / 1000 }
+        };
       }
-    }
+    });
+    
+    // Wait for all images to be processed in parallel
+    results = await Promise.all(processingPromises);
     
     // Add overall processing time metadata
     const globalProcessingTime = (Date.now() - globalStartTime) / 1000;

@@ -46,19 +46,23 @@ class OCRLoadTester {
         ? testImage
         : "./test-document.txt";
       // Read file and convert to base64
-      const imageBase64 = fs.readFileSync(filePath, { encoding: 'base64' });
+      const imageBase64 = fs.readFileSync(filePath, { encoding: "base64" });
 
       // Using approach from original test scripts with base64 encoding
-      const response = await axios.post(this.jsAppUrl, {
-        imageBase64: `data:image/jpeg;base64,${imageBase64}`,
-        originalFileName: `test-image-${userId}.jpg`
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          "User-Agent": `LoadTest-User-${userId}`,
+      const response = await axios.post(
+        this.jsAppUrl,
+        {
+          imageBase64: `data:image/jpeg;base64,${imageBase64}`,
+          originalFileName: `test-image-${userId}.jpg`,
         },
-        timeout: 30000, // 30 second timeout
-      });
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": `LoadTest-User-${userId}`,
+          },
+          timeout: 30000, // 30 second timeout
+        }
+      );
 
       const endTime = Date.now();
       const responseTime = endTime - startTime;
@@ -94,19 +98,23 @@ class OCRLoadTester {
         ? testImage
         : "./test-document.txt";
       // Read file and convert to base64
-      const imageBase64 = fs.readFileSync(filePath, { encoding: 'base64' });
+      const imageBase64 = fs.readFileSync(filePath, { encoding: "base64" });
 
       // Using approach from original test scripts with base64 encoding
-      const response = await axios.post(this.phpAppUrl, {
-        imageBase64: `data:image/jpeg;base64,${imageBase64}`,
-        originalFileName: `test-image-${userId}.jpg`
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          "User-Agent": `LoadTest-User-${userId}`,
+      const response = await axios.post(
+        this.phpAppUrl,
+        {
+          imageBase64: `data:image/jpeg;base64,${imageBase64}`,
+          originalFileName: `test-image-${userId}.jpg`,
         },
-        timeout: 30000, // 30 second timeout
-      });
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": `LoadTest-User-${userId}`,
+          },
+          timeout: 30000, // 30 second timeout
+        }
+      );
 
       const endTime = Date.now();
       const responseTime = endTime - startTime;
