@@ -12,6 +12,42 @@ const { Readable } = require('stream');
 const os = require('os');
 const { LRUCache } = require('lru-cache');
 
+// Track temporary credential files created at runtime
+const createdTempFiles = new Set();
+let cleanupRegistered = false;
+
+async function cleanupTempFiles() {
+  for (const file of Array.from(createdTempFiles)) {
+    try {
+      await fs.unlink(file);
+      createdTempFiles.delete(file);
+    } catch (err) {
+      logger.error(`Failed to delete temp credential file ${file}: ${err.message}`);
+    }
+  }
+  // Attempt to remove the temp directory if empty
+  const tempDir = path.join(os.tmpdir(), 'ocr-api-credentials');
+  try {
+    await fs.rmdir(tempDir);
+  } catch (err) {
+    // Directory may not be empty or may not exist
+  }
+}
+
+function registerTempCleanup() {
+  if (cleanupRegistered) return;
+  cleanupRegistered = true;
+  process.on('exit', () => {
+    cleanupTempFiles().catch(() => {});
+  });
+  ['SIGINT', 'SIGTERM'].forEach(sig => {
+    process.on(sig, async () => {
+      await cleanupTempFiles();
+      process.exit();
+    });
+  });
+}
+
 // Configure logger
 const logger = winston.createLogger({
   level: "info",
@@ -48,32 +84,36 @@ async function getCredentialFiles() {
     try {
       // Parse the JSON string containing an array of credential objects
       const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-      
+
       // Create temporary files for each credential
       const tempDir = path.join(os.tmpdir(), 'ocr-api-credentials');
-      
+
       try {
         await fs.mkdir(tempDir, { recursive: true });
       } catch (err) {
         // Directory might already exist
       }
-      
+
+      registerTempCleanup();
+
       const credentialFiles = [];
-      
+
       // Write each credential to a temporary file
       for (let i = 0; i < credentials.length; i++) {
         const filePath = path.join(tempDir, `credentials${i + 1}.json`);
         await fs.writeFile(filePath, JSON.stringify(credentials[i]), 'utf8');
         credentialFiles.push(filePath);
+        createdTempFiles.add(filePath);
+        credentialContentCache[filePath] = credentials[i];
       }
-      
+
       logger.info(`Created ${credentialFiles.length} temporary credential files in ${tempDir}`);
       return credentialFiles;
     } catch (error) {
       logger.error(`Error processing GOOGLE_CREDENTIALS env var: ${error.message}`);
       return [];
     }
-  } 
+  }
   
   // Fall back to file system for local development
   if (cachedCredentialFiles) {
@@ -190,10 +230,15 @@ async function getAccessToken(credentials) {
     );
     
     const accessToken = response.data.access_token;
-    
+
     // Cache the token
     tokenCache.set(cacheKey, accessToken);
-    
+
+    // Remove temporary credential files once a token is generated
+    if (createdTempFiles.size > 0) {
+      cleanupTempFiles().catch(() => {});
+    }
+
     return accessToken;
   } catch (error) {
     logger.error(`Error getting access token: ${error.message}`);
@@ -420,6 +465,9 @@ async function preWarmAuthTokens() {
     
     await Promise.all(warmupPromises);
     logger.info(`Pre-warmed ${warmupPromises.length} authentication tokens`);
+    if (createdTempFiles.size > 0) {
+      await cleanupTempFiles();
+    }
   } catch (error) {
     logger.error(`Error during token pre-warming: ${error.message}`);
   }
