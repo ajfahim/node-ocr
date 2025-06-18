@@ -3,10 +3,10 @@ const path = require('path');
 const axios = require('axios');
 
 // Configuration
-const CONCURRENT_REQUESTS = 5; // Lower this for testing the live site to avoid overwhelming it
+const CONCURRENT_REQUESTS = 100; // Increased concurrency for stronger test
 const API_URL = 'https://ocr3.thisblogg.top/ocr.php';
 const TEST_IMAGE = path.join(__dirname, 'test-image.jpg');
-const TOTAL_REQUESTS = 10; // Keep this lower for the live test
+const TOTAL_REQUESTS = 1000; // Testing with 1000 requests to check extreme load
 
 async function runLoadTest() {
   console.log(`Starting load test on live PHP API with ${CONCURRENT_REQUESTS} concurrent requests`);

@@ -3,10 +3,10 @@ const path = require("path");
 const axios = require("axios");
 
 // Configuration
-const CONCURRENT_REQUESTS = 10;
+const CONCURRENT_REQUESTS = 100; // Increased concurrency for stronger test
 const API_URL = "https://node-ocr-8znk.vercel.app/api/ocr/base64";
 const TEST_IMAGE = path.join(__dirname, "test-image.jpg");
-const TOTAL_REQUESTS = 10; // Keep this conservative to avoid overwhelming the service
+const TOTAL_REQUESTS = 1000; // Testing with 1000 requests to check extreme load
 
 async function runLoadTest() {
   console.log(
