@@ -45,3 +45,5 @@ Thumbs.db
 *.swo
 .env
 
+pnpm-lock.yaml
+
