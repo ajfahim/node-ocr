@@ -26,9 +26,6 @@ importers:
       express-rate-limit:
         specifier: ^7.1.5
         version: 7.5.0(express@4.21.2)
-      form-data:
-        specifier: ^4.0.3
-        version: 4.0.3
       googleapis:
         specifier: ^129.0.0
         version: 129.0.0
