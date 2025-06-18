@@ -96,10 +96,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function sendImageDataForOcr(imageBase64, fileName, placeholderId) {
     return new Promise((resolve, reject) => {
-      const formData = new FormData();
-      formData.append("imageBase64", imageBase64);
-      formData.append("originalFileName", fileName);
-
       fetch("/api/ocr/base64", {
         method: "POST",
         body: JSON.stringify({ imageBase64, originalFileName: fileName }),
@@ -161,20 +157,25 @@ document.addEventListener("DOMContentLoaded", () => {
       );
     }
 
-    resultsArea.innerHTML = "<h2>Results:</h2>";
-    loadingDiv.style.display = "block"; // Global loading indicator
+    // Show loading indicator
+    loadingDiv.style.display = "block";
     processButton.disabled = true;
-    placeholderIdCounter = 0; // Reset for unique IDs per batch
+    resultsArea.innerHTML = "<h2>Processing...</h2>";
 
-    const allProcessingPromises = [];
-
-    // First pass to create all placeholders for images and determine PDF pages for placeholders
+    // Prepare tasks list for processing
     const fileTasks = [];
+
+    // Loop through all selected files and determine processing strategy
     for (const file of selectedFiles) {
       if (file.type.startsWith("image/")) {
+        // Image task
         const placeholderId = `item-${placeholderIdCounter++}`;
         createPlaceholder(file.name, placeholderId);
-        fileTasks.push({ type: "image", file, placeholderId });
+        fileTasks.push({
+          type: "image",
+          file: file,
+          placeholderId: placeholderId,
+        });
       } else if (
         file.type === "application/pdf" &&
         typeof pdfjsLib !== "undefined"
@@ -230,37 +231,97 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // Now execute the tasks
-    for (const task of fileTasks) {
-      if (task.type === "image") {
-        allProcessingPromises.push(
-          (async () => {
-            try {
-              const reader = new FileReader();
-              const base64Image = await new Promise((resolve, reject) => {
-                reader.onload = (event) => resolve(event.target.result);
-                reader.onerror = (error) => reject(error);
-                reader.readAsDataURL(task.file);
+    // Prepare for batch processing of all image files
+    const batchProcessImages = async () => {
+      // Get all image tasks
+      const imageTasks = fileTasks.filter((task) => task.type === "image");
+      if (imageTasks.length === 0) return;
+
+      try {
+        // Convert all images to base64 in parallel
+        const imageDataPromises = imageTasks.map((task) => {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              resolve({
+                placeholderId: task.placeholderId,
+                imageBase64: event.target.result,
+                originalFileName: task.file.name,
               });
-              await sendImageDataForOcr(
-                base64Image,
-                task.file.name,
-                task.placeholderId
-              );
-            } catch (readError) {
-              console.error(
-                `Error reading image file ${task.file.name}:`,
-                readError
-              );
-              updatePlaceholderWithClientError(
-                task.placeholderId,
-                task.file.name,
-                "Could not read the file."
-              );
+            };
+            reader.onerror = (error) => reject({ task, error });
+            reader.readAsDataURL(task.file);
+          });
+        });
+
+        // Wait for all images to be processed to base64
+        const imagesData = await Promise.all(imageDataPromises);
+
+        // Send the batch to the server
+        const response = await fetch("/api/ocr/base64", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(imagesData),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const batchResults = await response.json();
+        console.log("Batch processing results:", batchResults);
+
+        // Process the results
+        if (batchResults.results && Array.isArray(batchResults.results)) {
+          // Map results to placeholders using file names
+          const fileNameToPlaceholderId = {};
+          imageTasks.forEach((task) => {
+            fileNameToPlaceholderId[task.file.name] = task.placeholderId;
+          });
+
+          batchResults.results.forEach((result) => {
+            const placeholderId = fileNameToPlaceholderId[result.fileName];
+            if (placeholderId) {
+              updatePlaceholder(placeholderId, result, result.fileName);
             }
-          })()
-        );
-      } else if (task.type === "pdf-meta") {
+          });
+
+          // Add batch processing summary
+          const summaryDiv = document.createElement("div");
+          summaryDiv.className = "batch-summary";
+          summaryDiv.innerHTML = `
+            <h3>Batch Processing Summary</h3>
+            <p>Processed ${
+              batchResults.meta.processedCount
+            } files in ${batchResults.meta.batchProcessingTime.toFixed(
+            2
+          )} seconds</p>
+          `;
+          resultsArea.insertBefore(summaryDiv, resultsArea.firstChild);
+        }
+      } catch (error) {
+        console.error("Batch processing error:", error);
+        imageTasks.forEach((task) => {
+          updatePlaceholderWithClientError(
+            task.placeholderId,
+            task.file.name,
+            `Batch processing error: ${error.message}`
+          );
+        });
+      }
+    };
+
+    // Now execute the tasks
+    const allProcessingPromises = [];
+
+    // Add batch image processing promise
+    allProcessingPromises.push(batchProcessImages());
+
+    // Process PDF files individually as before
+    for (const task of fileTasks) {
+      if (task.type === "pdf-meta") {
         allProcessingPromises.push(
           (async () => {
             const pageTasks = await task.promise; // Get array of page tasks

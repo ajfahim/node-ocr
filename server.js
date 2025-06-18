@@ -84,88 +84,128 @@ app.get("/health", (req, res) => {
 // OCR endpoint for base64 image data
 app.post("/api/ocr/base64", async (req, res) => {
   try {
-    const startTime = Date.now();
-
-    // Validate request
-    if (!req.body.imageBase64 || !req.body.originalFileName) {
+    const globalStartTime = Date.now();
+    let results = [];
+    
+    // Check if we have an array of images or a single image
+    const isArrayOfImages = Array.isArray(req.body);
+    const imageDataArray = isArrayOfImages ? req.body : [req.body];
+    
+    // Validate that we have at least one image
+    if (imageDataArray.length === 0) {
       return res.status(400).json([
         {
           fileName: "N/A",
           success: false,
-          error: "Missing required fields: imageBase64 and originalFileName.",
+          error: "No image data provided.",
         },
       ]);
     }
-
-    const { imageBase64, originalFileName } = req.body;
-    let imageData, extractedMimeType;
-
-    // Extract the base64 data and MIME type
-    if (imageBase64.startsWith("data:")) {
-      const matches = imageBase64.match(
-        /^data:(image\/\w+|application\/pdf);base64,(.*)$/
-      );
-      if (matches) {
-        extractedMimeType = matches[1];
-        imageData = Buffer.from(matches[2], "base64");
-      } else {
-        return res.status(400).json([
-          {
+    
+    // Process each image in the request
+    for (const imageItem of imageDataArray) {
+      const itemStartTime = Date.now();
+      
+      // Validate this item has required fields
+      if (!imageItem.imageBase64 || !imageItem.originalFileName) {
+        results.push({
+          fileName: imageItem.originalFileName || "N/A",
+          success: false,
+          error: "Missing required fields: imageBase64 and/or originalFileName.",
+        });
+        continue;
+      }
+      
+      const { imageBase64, originalFileName } = imageItem;
+      let imageData, extractedMimeType;
+      
+      // Extract the base64 data and MIME type
+      if (imageBase64.startsWith("data:")) {
+        const matches = imageBase64.match(
+          /^data:(image\/\w+|application\/pdf);base64,(.*)$/
+        );
+        if (matches) {
+          extractedMimeType = matches[1];
+          imageData = Buffer.from(matches[2], "base64");
+        } else {
+          results.push({
             fileName: originalFileName,
             success: false,
             error: "Invalid base64 image format.",
-          },
-        ]);
-      }
-    } else {
-      // Raw base64 data
-      try {
-        imageData = Buffer.from(imageBase64, "base64");
-        extractedMimeType = "application/octet-stream"; // Default MIME type
-      } catch (error) {
-        return res.status(400).json([
-          {
+          });
+          continue;
+        }
+      } else {
+        // Raw base64 data
+        try {
+          imageData = Buffer.from(imageBase64, "base64");
+          extractedMimeType = "application/octet-stream"; // Default MIME type
+        } catch (error) {
+          results.push({
             fileName: originalFileName,
             success: false,
             error: "Invalid base64 data.",
-          },
-        ]);
+          });
+          continue;
+        }
       }
-    }
-
-    // Validate size
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (imageData.length > maxSize) {
-      return res.status(400).json([
-        {
+      
+      // Validate size
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (imageData.length > maxSize) {
+        results.push({
           fileName: originalFileName,
           success: false,
           error: `Decoded image exceeds maximum size of 10MB. Size: ${imageData.length} bytes.`,
-        },
-      ]);
+        });
+        continue;
+      }
+      
+      // Process the image
+      logger.info(
+        `Processing image: ${originalFileName}, Size: ${imageData.length} bytes`
+      );
+      
+      try {
+        const result = await performOcr(
+          imageData,
+          originalFileName,
+          extractedMimeType
+        );
+        
+        // Add timing info for this specific image
+        result.timing.item_duration = (Date.now() - itemStartTime) / 1000;
+        
+        results.push(result);
+      } catch (ocrError) {
+        logger.error(`Error in OCR for ${originalFileName}: ${ocrError.message}`);
+        results.push({
+          fileName: originalFileName,
+          success: false,
+          error: `OCR processing error: ${ocrError.message}`,
+        });
+      }
     }
-
-    // Process the image
-    logger.info(
-      `Processing image: ${originalFileName}, Size: ${imageData.length} bytes`
-    );
-    const result = await performOcr(
-      imageData,
-      originalFileName,
-      extractedMimeType
-    );
-    const endTime = Date.now();
-
-    // Add timing info
-    result.timing.total_duration = (endTime - startTime) / 1000;
-
-    // Return result in format similar to PHP version
-    res.json([result]);
+    
+    // Add overall processing time metadata
+    const globalProcessingTime = (Date.now() - globalStartTime) / 1000;
+    const metaInfo = {
+      batchProcessingTime: globalProcessingTime,
+      processedCount: results.length,
+    };
+    
+    logger.info(`Batch processing complete. Processed ${results.length} images in ${globalProcessingTime.toFixed(2)}s`);
+    
+    // Return all results
+    res.json({
+      meta: metaInfo,
+      results: results
+    });
   } catch (error) {
-    logger.error(`Error processing base64 image: ${error.message}`);
+    logger.error(`Error processing batch of images: ${error.message}`);
     res.status(500).json([
       {
-        fileName: req.body.originalFileName || "N/A",
+        fileName: "batch-processing",
         success: false,
         error: `Server error: ${error.message}`,
       },
