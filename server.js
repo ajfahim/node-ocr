@@ -35,8 +35,9 @@ const logger = winston.createLogger({
 // Middleware
 app.use(helmet());
 app.use(cors());
-app.use(express.json({ limit: "10mb" })); // For parsing application/json with larger limit for base64
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+// Use the same 5MB limit for JSON bodies and form uploads
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
 // Configure storage for file uploads
 const storage = multer.memoryStorage();
@@ -152,12 +153,12 @@ app.post("/api/ocr/base64", async (req, res) => {
       }
       
       // Validate size
-      const maxSize = 10 * 1024 * 1024; // 10MB
+      const maxSize = 5 * 1024 * 1024; // 5MB
       if (imageData.length > maxSize) {
         return {
           fileName: originalFileName,
           success: false,
-          error: `Decoded image exceeds maximum size of 10MB. Size: ${imageData.length} bytes.`,
+          error: `Decoded image exceeds maximum size of 5MB. Size: ${imageData.length} bytes.`,
           timing: { item_duration: (Date.now() - itemStartTime) / 1000 }
         };
       }
